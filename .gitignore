@@ -1,0 +1,13 @@
+# images
+*.png
+*.gif
+
+# fonts
+*.ttf
+*.otf
+
+# logs, backups
+*.log
+*.bkp
+
+
