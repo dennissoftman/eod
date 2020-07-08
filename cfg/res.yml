@@ -1,0 +1,54 @@
+---
+-
+    type: "food"
+    refreshable: YES
+    refresh_time: 80 # in secs
+    hardness: 0.1
+    texture: "img/berries_0.png"
+    frame_count: 5
+-
+    type: "food"
+    refreshable: YES
+    refresh_time: 70 # in secs
+    hardness: 0.1
+    texture: "img/berries_1.png"
+    frame_count: 5
+-
+    type: "food"
+    refreshable: YES
+    refresh_time: 68 # in secs
+    hardness: 0.1
+    texture: "img/berries_2.png"
+    frame_count: 5
+-
+    type: "wood"
+    refreshable: YES
+    refresh_time: 100 # in secs
+    hardness: 0.3
+    texture: "img/tree_0.png"
+    frame_count: 5
+-
+    type: "wood"
+    refreshable: YES
+    refresh_time: 100 # in secs
+    hardness: 0.3
+    texture: "img/tree_1.png"
+    frame_count: 5
+-
+    type: "stone"
+    refreshable: NO
+    hardness: 0.9
+    texture: "img/stone_0.png"
+    frame_count: 5
+-
+    type: "stone"
+    refreshable: NO
+    hardness: 0.9
+    texture: "img/stone_1.png"
+    frame_count: 5
+-
+    type: "gold"
+    refreshable: NO
+    hardness: 1.0
+    texture: "img/gold_ore_0.png"
+    frame_count: 5

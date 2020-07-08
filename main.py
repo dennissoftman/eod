@@ -1,24 +1,15 @@
 import pygame
-from enum import Enum
 from random import randint as rand
 from random import uniform as randfloat
 
-# global vars
-GAME_TITLE = "Evolve or die"
-GAME_WIDTH = 1280
-GAME_HEIGHT = 720
-GAME_TFPS = 30
-GAME_DELTATIME = 1./GAME_TFPS
-GAME_TIME_SCALE = 1.
-GAME_RENDERMODE = 1     # 1 - textured, 0 - colored rects
-GAME_LANG = "ru"
+import yaml
+import copy
 
-G_BLACK = (0x00, 0x00, 0x00)
-G_RED = (0xFF, 0x00, 0x00)
-G_GREEN = (0x00, 0xFF, 0x00)
-G_BLUE = (0x00, 0x00, 0xFF)
-G_WHITE = (0xFF, 0xFF, 0xFF)
+from eod_primitives import *
+from eod_config import *
+from eod_tr import tr
 
+#
 MEN_NAMES = ["Aaron", "Abel", "Adrian", "Alfred", "Andrew", "Arnold", "Arthur",
              "Ben", "Bill", "Bert", "Bradley",
              "Chuck", "Caleb", "Calvin", "Casey", "Christian",
@@ -30,101 +21,7 @@ WOMEN_NAMES = ["Ada", "Aggie", "Adele", "Ariana", "Anastasia", "Amelia",
                "Erin", "Ellen", "Ella", "Estella", "Elza",
                "Felicia", "Florence",
                "Gabrielle", "Gina", "Grace"]
-
-TR_ENGLISH = {}
-TR_RUSSIAN = {"food": "еда", "wood": "дерево", "stone": "камни", "gold": "золото",
-              "foodman": "знахарь", "woodman": "дровосек", "stoneman": "каменщик", "goldman": "золотодобытчик",
-              "foodgirl": "знахарка", "woodgirl": "дровосечиха", "stonegirl": "каменщица", "goldgirl": "золотодобытчица",
-              "aaron": "артем", "andrew": "андрей", "abel": "абель", "adrian": "адриан", "arnold": "алексей", "alfred": "альфред",
-              "ben": "борис", "bill": "богдан", "bert": "ваня", "bradley": "бредли",
-              "chuck": "чук", "caleb": "калеб", "calvin": "коля", "casey": "клим", "christian": "кристиан",
-              "dennis": "денис", "daniel": "даниил", "donald": "дональд", "douglas": "дуглас", "doyle": "дойль"}
-
 #
-
-
-def tr(key: str = str()):
-    if GAME_LANG == "ru":
-        if key not in TR_RUSSIAN.keys():
-            return key
-        return TR_RUSSIAN[key]
-    if key not in TR_ENGLISH.keys():
-        return key
-    return TR_ENGLISH[key]
-
-
-class vec2:
-    x: float
-    y: float
-
-    def __init__(self, x=0., y=0.):
-        self.x = x
-        self.y = y
-
-    def __sub__(self, other):
-        return vec2(self.x - other.x, self.y - other.y)
-
-    def __add__(self, other):
-        return vec2(self.x + other.x, self.y + other.y)
-
-    def __iadd__(self, other):
-        self.x += other.x
-        self.y += other.y
-        return self
-
-    def __mul__(self, other: float):
-        return vec2(self.x*other, self.y*other)
-
-    def __idiv__(self, other: float):
-        if other != 0.:
-            self.x /= other
-            self.y /= other
-        return self
-
-    def __imul__(self, other: float):
-        self.x *= other
-        self.y *= other
-        return self
-
-    def __abs__(self):
-        return vec2(abs(self.x), abs(self.y))
-
-    def __round__(self, n=None):
-        return vec2(round(self.x), round(self.y))
-
-    def __len__(self):
-        return (self.x * self.x + self.y * self.y)**0.5
-
-    def __le__(self, other):
-        if self.x <= other.x and self.y <= other.y:
-            return True
-        return False
-
-    def normalized(self):
-        if self.__len__() == 0:
-            return vec2(0, 0)
-        return vec2(self.x, self.y) * (1. / self.__len__())
-
-    def in_rect(self, top_left, bot_right) -> bool:
-        return (top_left.x <= self.x <= bot_right.x) and (top_left.y <= self.y <= bot_right.y)
-
-    # helper function for pygame.draw
-    def data(self) -> tuple:
-        return round(self.x), round(self.y)
-
-
-class icolor:
-    r: int
-    g: int
-    b: int
-
-    def __init__(self, val: tuple = (0, 0, 0)):
-        self.r = val[0]
-        self.g = val[1]
-        self.b = val[2]
-
-    def data(self) -> tuple:
-        return self.r, self.g, self.b
 
 
 class Object2D:
@@ -137,7 +34,7 @@ class Object2D:
 
     def __init__(self, win_surface: pygame.Surface = None,
                  pos=vec2(), dim=vec2(),
-                 color=icolor(), texture: pygame.Surface = None):
+                 texture: pygame.Surface = None):
         self.targetSurf = win_surface
         self.pos = pos
         self.dim = dim
@@ -145,21 +42,14 @@ class Object2D:
             self.selfSurf = pygame.Surface(self.dim.data())
         else:
             self.selfSurf = pygame.transform.scale(texture, self.dim.data())
-        colors = dict()
+
+        self.color = icolor()
         for y in range(0, int(self.dim.y)):
             for x in range(0, int(self.dim.x)):
                 col = self.selfSurf.get_at((x, y))[:3]
                 if col == G_BLACK:
                     continue
-                if col not in colors.keys():
-                    colors[col] = 1
-                else:
-                    colors[col] += 1
-        maxc = 0
-        for col in colors.keys():
-            if colors[col] > maxc:
-                maxc = colors[col]
-                self.color = icolor(col)
+                self.color.mix(icolor(col))
 
     def update(self):
         pass
@@ -198,7 +88,7 @@ class Text2D:
         self.text_surf = font.render(self.text, False, self.color.data())
 
     def draw(self):
-        self.target_surf.blit(self.text_surf, (self.pos.x, self.pos.y))
+        self.target_surf.blit(self.text_surf, self.pos.data())
 
 
 # game-related classes
@@ -206,18 +96,12 @@ WANDER_SPEED = 40
 MOVE_SPEED = 100
 
 
-class ResID(Enum):
-    NONE = 0
-    FOOD = 1
-    WOOD = 2
-    STONE = 3
-    GOLD = 4
-
-
 class Resource(Object2D):
-    r_id: ResID
+    r_id: int = 0
+    r_type: str = str()
     capacity: float = 0
     quantity: float = 0
+    partCount: int = 0
     partSurfs: list
     is_refreshable: bool = False
     refresh_time: float = 0.0
@@ -226,18 +110,19 @@ class Resource(Object2D):
 
     def __init__(self, win_surface: pygame.Surface = None,
                  pos=vec2(), dim=vec2(),
-                 color=icolor(), texture: pygame.Surface = None):
-        super().__init__(win_surface=win_surface, pos=pos, dim=dim, color=color, texture=texture)
-        if texture is None:
-            return
-        self.partSurfs = list()
-        tex_dim: vec2 = vec2(texture.get_size()[0]//5, texture.get_size()[1])
-        for i in range(0, 5):
-            tex = texture.subsurface((int(tex_dim.x)*i, 0, int(tex_dim.x), int(tex_dim.y)))
-            self.partSurfs.append(pygame.transform.scale(tex, dim.data()))
+                 texture: pygame.Surface = None):
+        super().__init__(win_surface=win_surface, pos=pos, dim=dim, texture=texture)
 
-    def fill(self, r_id: ResID, amount: float, refresh_time=0.0):
-        self.r_id = r_id
+    def load_parts(self, texture: pygame.Surface, count: int):
+        assert(count > 0)
+        self.partCount = count
+        self.partSurfs = list()
+        tex_dim: vec2 = vec2(texture.get_size()[0] // self.partCount, texture.get_size()[1])
+        for i in range(0, self.partCount):
+            tex = texture.subsurface((int(tex_dim.x) * i, 0, int(tex_dim.x), int(tex_dim.y)))
+            self.partSurfs.append(pygame.transform.scale(tex, self.dim.data()))
+
+    def fill(self, amount: float, refresh_time=0.0):
         self.capacity = amount
         self.quantity = amount
         self.refresh_time = refresh_time
@@ -245,15 +130,6 @@ class Resource(Object2D):
             self.is_refreshable = True
         else:
             self.is_refreshable = False
-
-        if r_id == ResID.FOOD:
-            self.color = icolor((0xA3, 0x00, 0x39))
-        elif r_id == ResID.WOOD:
-            self.color = icolor((0x6E, 0x3E, 0x0E))
-        elif r_id == ResID.STONE:
-            self.color = icolor((0x8F, 0x8F, 0x8F))
-        elif r_id == ResID.GOLD:
-            self.color = icolor((0xFC, 0xCD, 0x00))
 
     def refill(self):
         self.quantity = self.capacity
@@ -271,28 +147,11 @@ class Resource(Object2D):
                 self.inner_counter = 0
 
     def __str__(self) -> str:
-        if self.r_id == ResID.FOOD:
-            return "food"
-        elif self.r_id == ResID.WOOD:
-            return "wood"
-        elif self.r_id == ResID.STONE:
-            return "stone"
-        elif self.r_id == ResID.GOLD:
-            return "gold"
-        return str()
+        return self.r_type
 
     def draw(self):
-        sz_mod = (self.quantity / self.capacity) * 1.2
-        if sz_mod >= 0.8:
-            self.selfSurf = self.partSurfs[0]
-        elif 0.75 <= sz_mod < 0.8:
-            self.selfSurf = self.partSurfs[1]
-        elif 0.4 <= sz_mod < 0.75:
-            self.selfSurf = self.partSurfs[2]
-        elif 0.1 <= sz_mod < 0.4:
-            self.selfSurf = self.partSurfs[3]
-        else:
-            self.selfSurf = self.partSurfs[4]
+        sz_mod = 1.0 - (0.9 * (self.quantity / self.capacity) + 0.1)
+        self.selfSurf = self.partSurfs[int(self.partCount * sz_mod)]
         super().draw()
 
     def take(self, amount: float) -> tuple:
@@ -370,8 +229,8 @@ class Peasant(Object2D):
     name: str = str()
     descText: Text2D
 
-    def __init__(self, win_surface: pygame.Surface = None, pos=vec2(), dim=vec2(), color=icolor(), texture=None):
-        super().__init__(win_surface=win_surface, pos=pos, dim=dim, color=color, texture=texture)
+    def __init__(self, win_surface: pygame.Surface = None, pos=vec2(), dim=vec2(), texture=None):
+        super().__init__(win_surface=win_surface, pos=pos, dim=dim, texture=texture)
 
         self.descText = Text2D(win_surface=win_surface, size=16)
 
@@ -388,11 +247,6 @@ class Peasant(Object2D):
         self.anims["walk_f"].load(texture, row_id=0, frame_size=vec2(16, 16))
         self.anims["walk_b"] = Animation(8, 0.05)
         self.anims["walk_b"].load(texture, row_id=1, frame_size=vec2(16, 16))
-
-        self.anims["gather_f"] = Animation(8, 0.05)
-        self.anims["gather_f"].load(texture, row_id=2, frame_size=vec2(16, 16))
-        self.anims["gather_b"] = Animation(8, 0.05)
-        self.anims["gather_b"].load(texture, row_id=2, frame_size=vec2(16, 16))
 
     def set_name(self, name: str, gender: str = "man"):
         self.name = name
@@ -438,10 +292,7 @@ class Peasant(Object2D):
         if self.is_moving:
             self.cur_anim = "walk"
         else:
-            if self.is_gathering:
-                self.cur_anim = "gather"
-            else:
-                self.cur_anim = "idle"
+            self.cur_anim = "idle"
 
         if self.direction.y >= 0:
             self.cur_anim += "_f"
@@ -477,13 +328,10 @@ class Peasant(Object2D):
                     self.update()
                     return
                 self.inner_counter += 1
-                self.is_moving = False
                 if (GAME_DELTATIME * self.inner_counter) >= (self.gather_period / GAME_TIME_SCALE):
                     self.inner_counter = 0
                     self.inventory.append(self.gather_obj.take(self.inventory_capacity))
                     self.target_pos = self.camp_obj.pos
-                    self.is_moving = True
-                    self.is_move_finished = False
             elif abs(self.pos-self.camp_obj.pos).__len__() < self.finish_dist():
                 self.target_pos = self.gather_obj.pos
                 for el in self.inventory:
@@ -614,6 +462,34 @@ class Camp(Object2D):
 #
 
 
+def load_resource_file(fname: str, scr_surf: pygame.Surface):
+    GAME_RESOURCES.clear()
+    fp = open(fname, "r")
+    fdata = ''.join(fp.readlines())
+    k = 0
+    for resource in yaml.load(fdata, Loader=yaml.FullLoader):
+        r = Resource(dim=vec2(32, 32), win_surface=scr_surf)
+        r.r_id = GAME_RESOURCES.__len__()
+        r.r_type = resource['type']
+        r.is_refreshable = resource['refreshable']
+        if r.is_refreshable:
+            r.refresh_time = resource['refresh_time']
+        # r.hardness = resource['hardness']
+        tex = pygame.image.load(resource['texture'])
+        r.load_parts(tex, resource['frame_count'])
+        GAME_RESOURCES.append(r)
+
+
+def get_resource_copy(r_id: int) -> Resource:
+    if GAME_RESOURCES.__len__() == 0:
+        print("No resources loaded!")
+        exit(-2)
+    if GAME_RESOURCES.__len__() < r_id:
+        print("Resource out of bounds ID!")
+        exit(-1)
+    return copy.copy(GAME_RESOURCES[r_id])
+
+
 def load_tex(fname=str()) -> pygame.Surface:
     tex: pygame.Surface
     try:
@@ -631,6 +507,8 @@ dPtr.set_caption(GAME_TITLE)
 
 game_objs = list()
 m_quit = False
+
+load_resource_file("cfg/res.yml", scrSurf)
 
 # fill object array
 mainCamp = Camp(pos=vec2(100, 100), dim=vec2(96, 96), win_surface=scrSurf, texture=load_tex("img/camp_0.png"))
@@ -668,7 +546,7 @@ if True:
 game_objs.append(mainCamp)
 #
 
-resPlace = ResID.WOOD
+resPlace = 0
 
 clock = pygame.time.Clock()
 while not m_quit:
@@ -678,33 +556,19 @@ while not m_quit:
             break
         if ev.type == pygame.MOUSEBUTTONDOWN:
             if ev.button == pygame.BUTTON_RIGHT:
-                res_tex = pygame.Surface((16, 16))
-                res_dim = vec2(32, 32)
-                if resPlace == ResID.FOOD:
-                    res_tex = load_tex("img/berries_{:d}.png".format(rand(0, 2)))
-                elif resPlace == ResID.WOOD:
-                    res_tex = load_tex("img/tree_{:d}.png".format(rand(0, 1)))
-                    res_dim = vec2(48, 48)
-                elif resPlace == ResID.STONE:
-                    res_tex = load_tex("img/rock_{:d}.png".format(rand(0, 1)))
-                elif resPlace == ResID.GOLD:
-                    res_tex = load_tex("img/gold_ore_0.png")
-                res = Resource(pos=vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]),
-                               dim=res_dim,
-                               win_surface=scrSurf,
-                               texture=res_tex)
-
-                if resPlace == ResID.WOOD or resPlace == ResID.FOOD:
-                    res.fill(resPlace, 50, refresh_time=60 + 120 * randfloat(0, 1))
+                res = get_resource_copy(resPlace)
+                res.pos = vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
+                if resPlace == 1 or resPlace == 0:
+                    res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
                 else:
-                    res.fill(resPlace, 100)
+                    res.fill(100)
                 mainCamp.register_resource(res)
             elif ev.button == pygame.BUTTON_WHEELUP:
-                if resPlace.value < 4:
-                    resPlace = ResID(resPlace.value + 1)
+                if resPlace < (GAME_RESOURCES.__len__() - 1):
+                    resPlace += 1
             elif ev.button == pygame.BUTTON_WHEELDOWN:
-                if resPlace.value > 1:
-                    resPlace = ResID(resPlace.value - 1)
+                if resPlace >= 1:
+                    resPlace -= 1
         elif ev.type == pygame.KEYDOWN:
             if ev.key == pygame.K_ESCAPE:
                 m_quit = True
