@@ -1,0 +1,38 @@
+---
+#   spec: "wood"
+#   gender: "male"
+#   texture: "img/woodman_0.png"
+#   For now, animations are hardcoded
+
+#   This is example of future animation description:
+#   animations: 
+#       - idle:
+#           width: 16
+#           height: 16
+#           row: 0  # 
+#           count: 4    # in reality, there will be at least 8 for 4, 12 for 6. (2 sides)
+#           time: 0.2 # in ms
+#       - walk:
+#           width: 16
+#           height: 16
+#           row: 1
+#           count: 8
+#           time: 0.05
+#       - gather:
+#           width: 16
+#           height: 16
+#           row: 2
+#           count: 8
+#           time: 0.05
+-
+    spec: "food"
+    gender: "female"
+    texture: "img/foodgirl_0.png"
+-
+    spec: "wood"
+    gender: "male"
+    texture: "img/woodman_0.png"
+-
+    spec: "stone"
+    gender: "male"
+    texture: "img/stoneman_0.png"

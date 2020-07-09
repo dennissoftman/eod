@@ -8,6 +8,7 @@ import copy
 from eod_primitives import *
 from eod_config import *
 from eod_tr import tr
+from eod_events import event_processor
 
 #
 MEN_NAMES = ["Aaron", "Abel", "Adrian", "Alfred", "Andrew", "Arnold", "Arthur",
@@ -98,6 +99,7 @@ MOVE_SPEED = 100
 
 class Resource(Object2D):
     r_id: int = 0
+    r_name: str = str()
     r_type: str = str()
     capacity: float = 0
     quantity: float = 0
@@ -106,12 +108,25 @@ class Resource(Object2D):
     is_refreshable: bool = False
     refresh_time: float = 0.0
 
+    is_selected: bool = False
+
+    desc_text: Text2D
+
     inner_counter: int = 0
 
     def __init__(self, win_surface: pygame.Surface = None,
                  pos=vec2(), dim=vec2(),
                  texture: pygame.Surface = None):
         super().__init__(win_surface=win_surface, pos=pos, dim=dim, texture=texture)
+        self.desc_text = Text2D(win_surface=self.targetSurf, size=16)
+
+    def set_res(self, r_id, r_name, r_type):
+        self.r_id = r_id
+        self.r_name = r_name
+        self.r_type = r_type
+
+        self.desc_text.set_text(tr(self.r_name))
+        self.desc_text.update()
 
     def load_parts(self, texture: pygame.Surface, count: int):
         assert(count > 0)
@@ -139,7 +154,12 @@ class Resource(Object2D):
             return False
         return True
 
+    def set_pos(self, pos: vec2):
+        self.pos = pos
+
     def update(self):
+        sz_mod = 1.0 - (0.9 * (self.quantity / self.capacity) + 0.1)
+        self.selfSurf = self.partSurfs[int(self.partCount * sz_mod)]
         if self.is_refreshable and self.quantity == 0:
             self.inner_counter += 1
             if (GAME_DELTATIME * self.inner_counter) >= self.refresh_time / GAME_TIME_SCALE:
@@ -149,10 +169,14 @@ class Resource(Object2D):
     def __str__(self) -> str:
         return self.r_type
 
+    def name(self) -> str:
+        return self.r_name
+
     def draw(self):
-        sz_mod = 1.0 - (0.9 * (self.quantity / self.capacity) + 0.1)
-        self.selfSurf = self.partSurfs[int(self.partCount * sz_mod)]
         super().draw()
+        if self.is_selected:
+            self.desc_text.pos = vec2(self.pos.x, self.pos.y - self.dim.y + 4)
+            self.desc_text.draw()
 
     def take(self, amount: float) -> tuple:
         delta = amount
@@ -227,16 +251,18 @@ class Peasant(Object2D):
     inner_counter: int = 0
 
     name: str = str()
-    descText: Text2D
+    desc_text: Text2D
 
     def __init__(self, win_surface: pygame.Surface = None, pos=vec2(), dim=vec2(), texture=None):
         super().__init__(win_surface=win_surface, pos=pos, dim=dim, texture=texture)
 
-        self.descText = Text2D(win_surface=win_surface, size=16)
+        if texture is not None:
+            self.load_textures(texture)
+
+    def load_textures(self, texture: pygame.Surface):
+        assert(texture is not None)
 
         self.anims = dict()
-        if texture is None:
-            return
 
         self.anims["idle_f"] = Animation(1, 0)
         self.anims["idle_f"].load(texture, row_id=0, frame_size=vec2(16, 16))
@@ -251,7 +277,8 @@ class Peasant(Object2D):
     def set_name(self, name: str, gender: str = "man"):
         self.name = name
         self.gender = gender
-        self.descText.set_text(tr(self.name.lower()).capitalize() + ", " + tr(self.specialization + self.gender))
+        self.desc_text = Text2D(win_surface=self.targetSurf, size=16)
+        self.desc_text.set_text(tr(self.name.lower()).capitalize() + ", " + tr(self.specialization + self.gender))
 
     def move_to(self, pos: vec2):
         self.target_pos = pos
@@ -354,8 +381,8 @@ class Peasant(Object2D):
         if self.is_selected:
             if self.is_moving:
                 pygame.draw.line(self.targetSurf, G_GREEN, self.pos.data(), self.target_pos.data())
-            self.descText.pos = vec2(self.pos.x, self.pos.y - self.dim.y + 4)
-            self.descText.draw()
+            self.desc_text.pos = vec2(self.pos.x, self.pos.y - self.dim.y + 4)
+            self.desc_text.draw()
 
 
 def sort_peasants_depth(a: Peasant) -> float:
@@ -403,22 +430,26 @@ class Camp(Object2D):
         for _p in self.peasants:
             _p.update()
 
-        pygame.event.get()
-        if pygame.mouse.get_pressed()[0]:
-            m_pos: vec2 = vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
-            if m_pos.in_rect(self.pos - self.dim*0.5, self.pos + self.dim*0.5):
-                self.is_selected = True
+    def selection_event(self, m_pos: vec2):
+        if m_pos.in_rect(self.pos - self.dim*0.5, self.pos + self.dim*0.5):
+            self.is_selected = True
+        else:
+            self.is_selected = False
+        sel_count: int = 0
+        for _p in self.peasants:
+            if m_pos.in_rect(_p.pos - _p.dim*0.5, _p.pos + _p.dim*0.5):
+                if sel_count < 1:
+                    _p.is_selected = True
+                    sel_count += 1
             else:
-                self.is_selected = False
-            sel_count: int = 0
-            for _p in self.peasants:
-                if m_pos.in_rect(_p.pos - _p.dim*0.5, _p.pos + _p.dim*0.5):
-                    if sel_count < 1:
-                        _p.is_selected = True
-                        sel_count += 1
-                else:
-                    if not pygame.key.get_pressed()[pygame.K_LSHIFT]:
-                        _p.is_selected = False
+                if not pygame.key.get_pressed()[pygame.K_LSHIFT]:
+                    sel_count = 0
+                    _p.is_selected = False
+        for _r in self.resource_places:
+            if m_pos.in_rect(_r.pos - _r.dim * 0.5, _r.pos + _r.dim * 0.5):
+                _r.is_selected = True
+            else:
+                _r.is_selected = False
 
     def draw(self):
         super().draw()
@@ -462,24 +493,6 @@ class Camp(Object2D):
 #
 
 
-def load_resource_file(fname: str, scr_surf: pygame.Surface):
-    GAME_RESOURCES.clear()
-    fp = open(fname, "r")
-    fdata = ''.join(fp.readlines())
-    k = 0
-    for resource in yaml.load(fdata, Loader=yaml.FullLoader):
-        r = Resource(dim=vec2(32, 32), win_surface=scr_surf)
-        r.r_id = GAME_RESOURCES.__len__()
-        r.r_type = resource['type']
-        r.is_refreshable = resource['refreshable']
-        if r.is_refreshable:
-            r.refresh_time = resource['refresh_time']
-        # r.hardness = resource['hardness']
-        tex = pygame.image.load(resource['texture'])
-        r.load_parts(tex, resource['frame_count'])
-        GAME_RESOURCES.append(r)
-
-
 def get_resource_copy(r_id: int) -> Resource:
     if GAME_RESOURCES.__len__() == 0:
         print("No resources loaded!")
@@ -490,6 +503,17 @@ def get_resource_copy(r_id: int) -> Resource:
     return copy.copy(GAME_RESOURCES[r_id])
 
 
+def get_peasant_copy(spec: str) -> Peasant:
+    if GAME_PEASANTS.__len__() == 0:
+        print("No peasants loaded!")
+        exit(-2)
+    if spec not in GAME_PEASANTS.keys():
+        print("Peasant spec not found!")
+        exit(-1)
+    pc = GAME_PEASANTS[spec].__len__()
+    return copy.copy(GAME_PEASANTS[spec][rand(0, pc-1)])
+
+
 def load_tex(fname=str()) -> pygame.Surface:
     tex: pygame.Surface
     try:
@@ -497,6 +521,40 @@ def load_tex(fname=str()) -> pygame.Surface:
     except pygame.error:
         tex = pygame.Surface((16, 16))
     return tex
+
+
+def load_resource_file(fname: str, scr_surf: pygame.Surface):
+    GAME_RESOURCES.clear()
+    fp = open(fname, "r")
+    fdata = ''.join(fp.readlines())
+    for resource in yaml.load(fdata, Loader=yaml.FullLoader):
+        r = Resource(dim=vec2(32, 32), win_surface=scr_surf)
+        r.set_res(GAME_RESOURCES.__len__(), resource['name'], resource['type'])
+        r.is_refreshable = resource['refreshable']
+        if r.is_refreshable:
+            r.refresh_time = resource['refresh_time']
+        # r.hardness = resource['hardness']
+        tex = pygame.image.load(resource['texture'])
+        r.load_parts(tex, resource['frame_count'])
+        GAME_RESOURCES.append(r)
+
+
+def load_peasants_file(fname: str, scr_surf: pygame.Surface):
+    GAME_PEASANTS.clear()
+    fp = open(fname, "r")
+    fdata = ''.join(fp.readlines())
+    for peasant in yaml.load(fdata, Loader=yaml.FullLoader):
+        p = Peasant(dim=vec2(32, 32), win_surface=scr_surf)
+
+        p.gender = peasant['gender']
+        p.specialization = peasant['spec']
+
+        tex = pygame.image.load(peasant['texture'])
+        p.load_textures(tex)
+
+        if p.specialization not in GAME_PEASANTS.keys():
+            GAME_PEASANTS[p.specialization] = list()
+        GAME_PEASANTS[p.specialization].append(p)
 
 
 pygame.init()
@@ -509,77 +567,87 @@ game_objs = list()
 m_quit = False
 
 load_resource_file("cfg/res.yml", scrSurf)
+load_peasants_file("cfg/pss.yml", scrSurf)
 
 # fill object array
-mainCamp = Camp(pos=vec2(100, 100), dim=vec2(96, 96), win_surface=scrSurf, texture=load_tex("img/camp_0.png"))
+mainCamp = Camp(pos=vec2(250, 100), dim=vec2(96, 96), win_surface=scrSurf, texture=load_tex("img/camp_0.png"))
 mainCamp.initialize()
 
 if True:
-    food_p_tex = load_tex("img/foodman_0.png")
-    wood_p_tex = load_tex("img/woodman_0.png")
-    stone_p_tex = load_tex("img/stoneman_0.png")
+    for a in range(0, 2):
+        p = get_peasant_copy("food")
+        p.assign("food", 0.5, 3)
+        p.pos = vec2(200 + 50*a**2, 50 + 50*a**2)
+        mainCamp.attach_peasant(p)
 
-    p = Peasant(pos=vec2(200, 50), dim=vec2(32, 32), win_surface=scrSurf, texture=food_p_tex)
-    p.assign("food", 0.5, 2)
-    mainCamp.attach_peasant(p)
+    for a in range(0, 2):
+        p = get_peasant_copy("wood")
+        p.assign("wood", 1.8, 2)
+        p.pos = vec2(200+50*a**2, 50 + 50*a**2)
+        mainCamp.attach_peasant(p)
 
-    p = Peasant(pos=vec2(100, 100), dim=vec2(32, 32), win_surface=scrSurf, texture=stone_p_tex)
-    p.assign("stone", 1.5, 1)
-    mainCamp.attach_peasant(p)
-    p = Peasant(pos=vec2(160, 300), dim=vec2(32, 32), win_surface=scrSurf, texture=stone_p_tex)
-    p.assign("stone", 1.5, 1)
-    mainCamp.attach_peasant(p)
-    p = Peasant(pos=vec2(50, 150), dim=vec2(32, 32), win_surface=scrSurf, texture=stone_p_tex)
-    p.assign("stone", 1.5, 1)
-    mainCamp.attach_peasant(p)
+    for a in range(0, 2):
+        p = get_peasant_copy("stone")
+        p.assign("stone", 3, 1)
+        p.pos = vec2(200+50*a**2, 50 + 50*a**2)
+        mainCamp.attach_peasant(p)
 
-    p = Peasant(pos=vec2(150, 200), dim=vec2(32, 32), win_surface=scrSurf, texture=wood_p_tex)
-    p.assign("wood", 1, 1)
-    mainCamp.attach_peasant(p)
-    p = Peasant(pos=vec2(100, 100), dim=vec2(32, 32), win_surface=scrSurf, texture=wood_p_tex)
-    p.assign("wood", 1, 1)
-    mainCamp.attach_peasant(p)
-    p = Peasant(pos=vec2(200, 350), dim=vec2(32, 32), win_surface=scrSurf, texture=wood_p_tex)
-    p.assign("wood", 1, 1)
-    mainCamp.attach_peasant(p)
 
 game_objs.append(mainCamp)
 #
-
 resPlace = 0
+
+
+def place_res(ev: pygame.event):
+    global resPlace
+    if ev.button == pygame.BUTTON_RIGHT:
+        res = get_resource_copy(resPlace)
+        res.set_pos(vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]))
+        if resPlace == 1 or resPlace == 0:
+            res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
+        else:
+            res.fill(100)
+        mainCamp.register_resource(res)
+    elif ev.button == pygame.BUTTON_WHEELUP:
+        if resPlace < (GAME_RESOURCES.__len__() - 1):
+            resPlace += 1
+    elif ev.button == pygame.BUTTON_WHEELDOWN:
+        if resPlace >= 1:
+            resPlace -= 1
+
+
+def quit_event(ev: pygame.event):
+    global m_quit
+    m_quit = True
+
+
+def select_event(ev: pygame.event):
+    global mainCamp
+    if ev.button == pygame.BUTTON_LEFT:
+        mainCamp.selection_event(vec2(ev.pos[0], ev.pos[1]))
+
+
+def game_speed_fast(ev: pygame.event):
+    global GAME_TIME_SCALE
+    GAME_TIME_SCALE = 5.0
+
+
+def game_speed_normal(ev: pygame.event):
+    global GAME_TIME_SCALE
+    GAME_TIME_SCALE = 1.0
+
+
+eproc = event_processor()
+eproc.bind(pygame.QUIT, quit_event)
+eproc.bind_keydown(pygame.K_ESCAPE, quit_event)
+eproc.bind(pygame.MOUSEBUTTONDOWN, place_res)
+eproc.bind(pygame.MOUSEBUTTONDOWN, select_event)
+eproc.bind_keydown(pygame.K_SPACE, game_speed_fast)
+eproc.bind_keyup(pygame.K_SPACE, game_speed_normal)
 
 clock = pygame.time.Clock()
 while not m_quit:
-    for ev in pygame.event.get():
-        if ev.type == pygame.QUIT:
-            m_quit = True
-            break
-        if ev.type == pygame.MOUSEBUTTONDOWN:
-            if ev.button == pygame.BUTTON_RIGHT:
-                res = get_resource_copy(resPlace)
-                res.pos = vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
-                if resPlace == 1 or resPlace == 0:
-                    res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
-                else:
-                    res.fill(100)
-                mainCamp.register_resource(res)
-            elif ev.button == pygame.BUTTON_WHEELUP:
-                if resPlace < (GAME_RESOURCES.__len__() - 1):
-                    resPlace += 1
-            elif ev.button == pygame.BUTTON_WHEELDOWN:
-                if resPlace >= 1:
-                    resPlace -= 1
-        elif ev.type == pygame.KEYDOWN:
-            if ev.key == pygame.K_ESCAPE:
-                m_quit = True
-                break
-            if ev.key == pygame.K_SPACE:
-                GAME_TIME_SCALE = 5.0
-            elif ev.key == pygame.K_F5:
-                GAME_RENDERMODE = not GAME_RENDERMODE
-        elif ev.type == pygame.KEYUP:
-            if ev.key == pygame.K_SPACE:
-                GAME_TIME_SCALE = 1.0
+    eproc.update()
 
     scrSurf.fill((0x72, 0x94, 0x4F))
     for obj in game_objs:
@@ -588,3 +656,4 @@ while not m_quit:
 
     dPtr.update()
     clock.tick(GAME_TFPS)
+pygame.quit()
