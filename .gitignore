@@ -10,4 +10,13 @@
 *.log
 *.bkp
 
+# archives
+*.txz
+*.tgz
+*.tbz
+*.xz
+*.gz
+*.bz2
+*.pak
+*.zip
 
