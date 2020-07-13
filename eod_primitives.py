@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 class vec2:
     x: float
     y: float

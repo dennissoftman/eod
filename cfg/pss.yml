@@ -1,4 +1,3 @@
----
 #   spec: "wood"
 #   gender: "male"
 #   texture: "img/woodman_0.png"
@@ -24,15 +23,16 @@
 #           row: 2
 #           count: 8
 #           time: 0.05
+---
 -
     spec: "food"
     gender: "female"
-    texture: "img/foodgirl_0.png"
+    texture: "/img/foodgirl_0.png"
 -
     spec: "wood"
     gender: "male"
-    texture: "img/woodman_0.png"
+    texture: "/img/woodman_0.png"
 -
     spec: "stone"
     gender: "male"
-    texture: "img/stoneman_0.png"
+    texture: "/img/stoneman_0.png"

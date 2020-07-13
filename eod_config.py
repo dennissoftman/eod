@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # global config vars
 GAME_TITLE = "Evolve or die"
 GAME_WIDTH = 1280
@@ -9,7 +11,7 @@ GAME_RENDERMODE = 1     # 1 - textured, 0 - colored rects
 GAME_LANG = "ru"
 
 # wood, food, stone, etc. presets (for copying)
-GAME_RESOURCES = list()
+GAME_RESOURCES = dict()
 # preloaded unit presets (for copying)
 GAME_PEASANTS = dict()
 

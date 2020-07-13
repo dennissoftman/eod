@@ -1,14 +1,19 @@
+#!/usr/bin/python3
+# encoding: utf-8
+
 import pygame
 from random import randint as rand
 from random import uniform as randfloat
 
 import yaml
 import copy
+import noise
 
 from eod_primitives import *
 from eod_config import *
 from eod_tr import tr
 from eod_events import event_processor
+from eod_resources import resource_loader
 
 #
 MEN_NAMES = ["Aaron", "Abel", "Adrian", "Alfred", "Andrew", "Arnold", "Arthur",
@@ -493,14 +498,17 @@ class Camp(Object2D):
 #
 
 
-def get_resource_copy(r_id: int) -> Resource:
+def get_resource_copy(r_type: str, r_v: int = 0) -> Resource:
     if GAME_RESOURCES.__len__() == 0:
         print("No resources loaded!")
         exit(-2)
-    if GAME_RESOURCES.__len__() < r_id:
-        print("Resource out of bounds ID!")
+    if r_type not in GAME_RESOURCES.keys():
+        print('Resource "{0}" not found!'.format(r_type))
         exit(-1)
-    return copy.copy(GAME_RESOURCES[r_id])
+    if r_v < 0:
+        r_v = rand(0, GAME_RESOURCES[r_type].__len__() - 1)
+    r_v %= GAME_RESOURCES[r_type].__len__()
+    return copy.copy(GAME_RESOURCES[r_type][r_v])
 
 
 def get_peasant_copy(spec: str) -> Peasant:
@@ -514,48 +522,10 @@ def get_peasant_copy(spec: str) -> Peasant:
     return copy.copy(GAME_PEASANTS[spec][rand(0, pc-1)])
 
 
-def load_tex(fname=str()) -> pygame.Surface:
-    tex: pygame.Surface
-    try:
-        tex = pygame.image.load(fname)
-    except pygame.error:
-        tex = pygame.Surface((16, 16))
-    return tex
-
-
-def load_resource_file(fname: str, scr_surf: pygame.Surface):
-    GAME_RESOURCES.clear()
-    fp = open(fname, "r")
-    fdata = ''.join(fp.readlines())
-    for resource in yaml.load(fdata, Loader=yaml.FullLoader):
-        r = Resource(dim=vec2(32, 32), win_surface=scr_surf)
-        r.set_res(GAME_RESOURCES.__len__(), resource['name'], resource['type'])
-        r.is_refreshable = resource['refreshable']
-        if r.is_refreshable:
-            r.refresh_time = resource['refresh_time']
-        # r.hardness = resource['hardness']
-        tex = pygame.image.load(resource['texture'])
-        r.load_parts(tex, resource['frame_count'])
-        GAME_RESOURCES.append(r)
-
-
-def load_peasants_file(fname: str, scr_surf: pygame.Surface):
-    GAME_PEASANTS.clear()
-    fp = open(fname, "r")
-    fdata = ''.join(fp.readlines())
-    for peasant in yaml.load(fdata, Loader=yaml.FullLoader):
-        p = Peasant(dim=vec2(32, 32), win_surface=scr_surf)
-
-        p.gender = peasant['gender']
-        p.specialization = peasant['spec']
-
-        tex = pygame.image.load(peasant['texture'])
-        p.load_textures(tex)
-
-        if p.specialization not in GAME_PEASANTS.keys():
-            GAME_PEASANTS[p.specialization] = list()
-        GAME_PEASANTS[p.specialization].append(p)
-
+gresl = resource_loader()
+gresl.load_pak("data.pak")
+# here you can load additional pak files
+# i'll add later config files for data loading
 
 pygame.init()
 dPtr = pygame.display   # display pointer
@@ -566,12 +536,102 @@ dPtr.set_caption(GAME_TITLE)
 game_objs = list()
 m_quit = False
 
-load_resource_file("cfg/res.yml", scrSurf)
-load_peasants_file("cfg/pss.yml", scrSurf)
+
+def load_tex(fname=str()) -> pygame.Surface:
+    global gresl
+
+    tex: pygame.Surface
+    try:
+        tex = pygame.image.load_extended(gresl.read_fp(fname))
+    except pygame.error:
+        print('Failed to load "', fname, '"')
+        tex = pygame.Surface((16, 16))
+    return tex
+
+
+def load_resource_file(fname: str, scr_surf: pygame.Surface):
+    global gresl
+
+    GAME_RESOURCES.clear()
+    fdata = gresl.read(fname).decode('utf-8')
+
+    # for now
+    dims = {'food': vec2(24, 24),
+            'wood': vec2(48, 48),
+            'stone': vec2(32, 32)}
+    #
+    dim: vec2
+    for resource in yaml.load(fdata, Loader=yaml.FullLoader):
+        if resource['type'] not in dims.keys():
+            dim = dims['food']
+        else:
+            dim = dims[resource['type']]
+
+        r = Resource(dim=dim, win_surface=scr_surf)
+        r.set_res(GAME_RESOURCES.__len__(), resource['name'], resource['type'])
+        r.is_refreshable = resource['refreshable']
+        if r.is_refreshable:
+            r.refresh_time = resource['refresh_time']
+
+        # r.hardness = resource['hardness']
+
+        tex = load_tex(resource['texture'])
+        r.load_parts(tex, resource['frame_count'])
+
+        if resource['type'] not in GAME_RESOURCES.keys():
+            GAME_RESOURCES[resource['type']] = list()
+        GAME_RESOURCES[resource['type']].append(r)
+
+
+def load_peasants_file(fname: str, scr_surf: pygame.Surface):
+    global gresl
+
+    GAME_PEASANTS.clear()
+    fdata = gresl.read(fname).decode('utf-8')
+    for peasant in yaml.load(fdata, Loader=yaml.FullLoader):
+        p = Peasant(dim=vec2(32, 32), win_surface=scr_surf)
+
+        p.gender = peasant['gender']
+        p.specialization = peasant['spec']
+
+        tex = load_tex(peasant['texture'])
+        p.load_textures(tex)
+
+        if p.specialization not in GAME_PEASANTS.keys():
+            GAME_PEASANTS[p.specialization] = list()
+        GAME_PEASANTS[p.specialization].append(p)
+
+
+load_resource_file("/cfg/res.yml", scrSurf)
+load_peasants_file("/cfg/pss.yml", scrSurf)
 
 # fill object array
-mainCamp = Camp(pos=vec2(250, 100), dim=vec2(96, 96), win_surface=scrSurf, texture=load_tex("img/camp_0.png"))
+mainCamp = Camp(pos=vec2(250, 100), dim=vec2(96, 96), win_surface=scrSurf, texture=load_tex("/img/camp_0.png"))
 mainCamp.initialize()
+
+if True:
+    # spawn food resources
+    for i in range(0, rand(10, 40)):
+        res = get_resource_copy("food", -1)
+        x, y = randfloat(-200, 200), randfloat(-200, 200)
+        res.set_pos(vec2(600 + x*0.2 - y*0.5, 400 + y*1.2))
+        res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
+        mainCamp.register_resource(res)
+
+    for i in range(0, rand(10, 25)):
+        res = get_resource_copy("wood", -1)
+        x, y = randfloat(-200, 200), randfloat(-200, 200)
+        res.set_pos(vec2(800 + x*0.3 - y*0.4 + 5*i*randfloat(-1, 1), 400 + y))
+        res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
+        mainCamp.register_resource(res)
+
+    for i in range(0, rand(5, 10)):
+        res = get_resource_copy("stone", -1)
+        x, y = randfloat(-100, 100), randfloat(-100, 100)
+        res.set_pos(vec2(200 + x, 400 + y - x * 0.2))
+        res.fill(100)
+        mainCamp.register_resource(res)
+
 
 if True:
     for a in range(0, 2):
@@ -598,22 +658,22 @@ game_objs.append(mainCamp)
 resPlace = 0
 
 
-def place_res(ev: pygame.event):
-    global resPlace
-    if ev.button == pygame.BUTTON_RIGHT:
-        res = get_resource_copy(resPlace)
-        res.set_pos(vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]))
-        if resPlace == 1 or resPlace == 0:
-            res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
-        else:
-            res.fill(100)
-        mainCamp.register_resource(res)
-    elif ev.button == pygame.BUTTON_WHEELUP:
-        if resPlace < (GAME_RESOURCES.__len__() - 1):
-            resPlace += 1
-    elif ev.button == pygame.BUTTON_WHEELDOWN:
-        if resPlace >= 1:
-            resPlace -= 1
+# def place_res(ev: pygame.event):
+#     global resPlace
+#     if ev.button == pygame.BUTTON_RIGHT:
+#         res = get_resource_copy(resPlace)
+#         res.set_pos(vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]))
+#         if resPlace == 1 or resPlace == 0:
+#             res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
+#         else:
+#             res.fill(100)
+#         mainCamp.register_resource(res)
+#     elif ev.button == pygame.BUTTON_WHEELUP:
+#         if resPlace < (GAME_RESOURCES.__len__() - 1):
+#             resPlace += 1
+#     elif ev.button == pygame.BUTTON_WHEELDOWN:
+#         if resPlace >= 1:
+#             resPlace -= 1
 
 
 def quit_event(ev: pygame.event):
@@ -640,7 +700,7 @@ def game_speed_normal(ev: pygame.event):
 eproc = event_processor()
 eproc.bind(pygame.QUIT, quit_event)
 eproc.bind_keydown(pygame.K_ESCAPE, quit_event)
-eproc.bind(pygame.MOUSEBUTTONDOWN, place_res)
+# eproc.bind(pygame.MOUSEBUTTONDOWN, place_res)
 eproc.bind(pygame.MOUSEBUTTONDOWN, select_event)
 eproc.bind_keydown(pygame.K_SPACE, game_speed_fast)
 eproc.bind_keyup(pygame.K_SPACE, game_speed_normal)

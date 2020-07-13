@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 from eod_config import GAME_LANG
 
 TR_ENGLISH = {}
