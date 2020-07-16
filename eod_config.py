@@ -10,10 +10,14 @@ GAME_TIME_SCALE = 1.
 GAME_RENDERMODE = 1     # 1 - textured, 0 - colored rects
 GAME_LANG = "ru"
 
+GAME_FONTS = dict()
+
 # wood, food, stone, etc. presets (for copying)
 GAME_RESOURCES = dict()
 # preloaded unit presets (for copying)
 GAME_PEASANTS = dict()
+
+# constants
 
 G_BLACK = (0x00, 0x00, 0x00)
 G_RED = (0xFF, 0x00, 0x00)

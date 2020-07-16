@@ -90,7 +90,7 @@ class Text2D:
         self.update()
 
     def update(self):
-        font = pygame.font.Font("font/uni_times.ttf", self.size)
+        font = GAME_FONTS["serif"]
         self.text_surf = font.render(self.text, False, self.color.data())
 
     def draw(self):
@@ -394,12 +394,40 @@ def sort_peasants_depth(a: Peasant) -> float:
     return a.pos.y
 
 
-class Camp(Object2D):
+class Structure(Object2D):
+    # s_stype is structure type, available types:
+    #   none  - structure just for fun! no sense
+    #   camp  - main building, some kind of town hall. Any building with roof and walls can be camp
+    #   house - space for peasants to live
+    #   production:id - some kind of structure for resource[id] production (lumberjack house, quarry, etc.)
+    #   processing:id_in:id_out - some kind of structure for resource[id] processing (sawmill, kitchen, etc.)
+    #   entertainment:id - some kind of structure for peasant entertainment[id] (church, circus, pub)
+    #
+    s_type: str = "none"
+    s_owners: list = list()
+
+    def add_peasant(self, other: Peasant):
+        self.s_owners.append(other)
+
+    def is_owner(self, other: Peasant) -> bool:
+        if other in self.s_owners:
+            return True
+        return False
+
+
+class House(Structure):
+
+    def initialize(self):
+        self.s_type = "house"
+
+
+class Camp(Structure):
     team: int = 0
     res_texts = dict()
 
     peasants: list = list()
     resource_places: list = list()
+    structures: list = list()
 
     is_selected: bool = False
 
@@ -408,6 +436,8 @@ class Camp(Object2D):
     #
 
     def initialize(self):
+        self.s_type = "camp"
+
         self.res_texts["food"] = Text2D(pos=vec2(2, 4), size=18, win_surface=self.targetSurf)
         self.res_texts["wood"] = Text2D(pos=vec2(2, 24), size=18, win_surface=self.targetSurf)
         self.res_texts["stone"] = Text2D(pos=vec2(2, 44), size=18, win_surface=self.targetSurf)
@@ -455,9 +485,17 @@ class Camp(Object2D):
                 _r.is_selected = True
             else:
                 _r.is_selected = False
+        for _s in self.structures:
+            if m_pos.in_rect(_s.pos - _s.dim * 0.5, _s.pos + _s.dim * 0.5):
+                _s.is_selected = True
+            else:
+                _s.is_selected = False
 
     def draw(self):
         super().draw()
+
+        for _s in self.structures:
+            _s.draw()
 
         for rp in self.resource_places:
             rp.draw()
@@ -549,6 +587,14 @@ def load_tex(fname=str()) -> pygame.Surface:
     return tex
 
 
+def preload_fonts(fonts: dict):
+    global gresl
+    GAME_FONTS.clear()
+    for fn in fonts.keys():
+        GAME_FONTS[fn] =\
+            pygame.font.Font(gresl.read_fp(fonts[fn]), 16)
+
+
 def load_resource_file(fname: str, scr_surf: pygame.Surface):
     global gresl
 
@@ -602,6 +648,7 @@ def load_peasants_file(fname: str, scr_surf: pygame.Surface):
         GAME_PEASANTS[p.specialization].append(p)
 
 
+preload_fonts({"serif": "/font/uni_times.ttf"})
 load_resource_file("/cfg/res.yml", scrSurf)
 load_peasants_file("/cfg/pss.yml", scrSurf)
 
@@ -656,24 +703,6 @@ if True:
 game_objs.append(mainCamp)
 #
 resPlace = 0
-
-
-# def place_res(ev: pygame.event):
-#     global resPlace
-#     if ev.button == pygame.BUTTON_RIGHT:
-#         res = get_resource_copy(resPlace)
-#         res.set_pos(vec2(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]))
-#         if resPlace == 1 or resPlace == 0:
-#             res.fill(50, refresh_time=60 + 120 * randfloat(0, 1))
-#         else:
-#             res.fill(100)
-#         mainCamp.register_resource(res)
-#     elif ev.button == pygame.BUTTON_WHEELUP:
-#         if resPlace < (GAME_RESOURCES.__len__() - 1):
-#             resPlace += 1
-#     elif ev.button == pygame.BUTTON_WHEELDOWN:
-#         if resPlace >= 1:
-#             resPlace -= 1
 
 
 def quit_event(ev: pygame.event):
