@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 import pygame
+from pygame import event as pyevent
 
 
 class event_processor:
@@ -32,7 +33,7 @@ class event_processor:
             self.GAME_KEYDOWN_EVENTS[key].remove(func)
 
     def update(self):
-        for ev in pygame.event.get():
+        for ev in pyevent.get():
             if ev.type in self.GAME_EVENTS.keys():
                 for ev_exec in self.GAME_EVENTS[ev.type]:
                     ev_exec(ev)

@@ -2,6 +2,7 @@
 
 from eod_config import GAME_LANG
 
+
 TR_ENGLISH = {}
 TR_RUSSIAN = {"food": "еда", "wood": "дерево", "stone": "камни", "gold": "золото",
               "berries": "ягоды", "oak": "дуб", "birch": "берёза", "rock": "камень", "gold_ore": "золотая руда",

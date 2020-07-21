@@ -5,6 +5,12 @@ import zlib
 import io
 import os
 
+from eod_config import *
+import copy
+
+from eod_peasants import Peasant
+from eod_basicclasses import Resource
+
 
 class resource_loader:
     # resources: dict[str, bytes]
@@ -40,3 +46,27 @@ class resource_loader:
 
     def read_fp(self, fname='.'):
         return io.BytesIO(self.read(fname))
+
+
+def get_resource_copy(r_type: str, r_v: int = 0) -> Resource:
+    if GAME_RESOURCES.__len__() == 0:
+        print("No resources loaded!")
+        exit(-2)
+    if r_type not in GAME_RESOURCES.keys():
+        print('Resource "{0}" not found!'.format(r_type))
+        exit(-1)
+    if r_v < 0:
+        r_v = rand(0, GAME_RESOURCES[r_type].__len__() - 1)
+    r_v %= GAME_RESOURCES[r_type].__len__()
+    return copy.copy(GAME_RESOURCES[r_type][r_v])
+
+
+def get_peasant_copy(spec: str) -> Peasant:
+    if GAME_PEASANTS.__len__() == 0:
+        print("No peasants loaded!")
+        exit(-2)
+    if spec not in GAME_PEASANTS.keys():
+        print("Peasant spec not found!")
+        exit(-1)
+    pc = GAME_PEASANTS[spec].__len__()
+    return copy.copy(GAME_PEASANTS[spec][rand(0, pc-1)])

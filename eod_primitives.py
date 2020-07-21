@@ -1,18 +1,19 @@
 # encoding: utf-8
 
+
 class vec2:
     x: float
     y: float
 
-    def __init__(self, x=0., y=0.):
-        self.x = x
-        self.y = y
+    def __init__(self, p=(0, 0)):
+        self.x = p[0]
+        self.y = p[1]
 
     def __sub__(self, other):
-        return vec2(self.x - other.x, self.y - other.y)
+        return vec2((self.x - other.x, self.y - other.y))
 
     def __add__(self, other):
-        return vec2(self.x + other.x, self.y + other.y)
+        return vec2((self.x + other.x, self.y + other.y))
 
     def __iadd__(self, other):
         self.x += other.x
@@ -20,7 +21,7 @@ class vec2:
         return self
 
     def __mul__(self, other: float):
-        return vec2(self.x*other, self.y*other)
+        return vec2((self.x*other, self.y*other))
 
     def __idiv__(self, other: float):
         if other != 0.:
@@ -34,10 +35,10 @@ class vec2:
         return self
 
     def __abs__(self):
-        return vec2(abs(self.x), abs(self.y))
+        return vec2((abs(self.x), abs(self.y)))
 
     def __round__(self, n=None):
-        return vec2(round(self.x), round(self.y))
+        return vec2((round(self.x), round(self.y)))
 
     def __len__(self):
         return (self.x * self.x + self.y * self.y)**0.5
@@ -49,8 +50,8 @@ class vec2:
 
     def normalized(self):
         if self.__len__() == 0:
-            return vec2(0, 0)
-        return vec2(self.x, self.y) * (1. / self.__len__())
+            return vec2((0, 0))
+        return vec2((self.x, self.y)) * (1. / self.__len__())
 
     def in_rect(self, top_left, bot_right) -> bool:
         return (top_left.x <= self.x <= bot_right.x) and (top_left.y <= self.y <= bot_right.y)
